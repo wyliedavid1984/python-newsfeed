@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, session, redirect
 from app.models import User, Post, Comment, Vote
 from app.db import get_db
 import sys
+from app.utils.auth import login_required
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -31,7 +32,7 @@ def signup():
 
     #insert failed, so rollback and send error to frontend
     db.rollback()
-    return jsonify(message = "Signup failed"), 500
+    return jsonify(message = "Signup New User failed"), 500
   
   # start session for new user
   session.clear()
@@ -66,14 +67,18 @@ def login():
   # verify password and throw error message is wrongh
   if user.verify_password(data["password"]) == False:
     return jsonify(message = "Incorrect credentials"), 400
-  
+
+  print(user.id, 'user id here')
   # start session for user
   session.clear()
   session["user_id"] = user.id
   session["loggedIn"] = True
-
+  print(session["user_id"], "userId", "is logged in", session["loggedIn"])
   return jsonify(id = user.id)
+
+# added route to make new comments
 @bp.route("/comments", methods=["POST"])
+@login_required
 def comment():
   data = request.get_json()
   db = get_db()
@@ -92,19 +97,20 @@ def comment():
     print(sys.exc_info()[0])
 
     db.rollback()
-    return jsonify(message = "Comment Failed"), 500
-    
+    return jsonify(message = "Create New Comment Failed"), 500
   return jsonify(id = newComment.id)
 
-@bp.route("/posts/upvote", method["PUT"])
+# update route to increase the vote count
+@bp.route("/posts/upvote", methods=["PUT"])
+@login_required
 def upvote():
   data = request.get_json()
-  db = get _db()
+  db = get_db()
 
   try:
     #create a new bote with incoming id and session id
     newVote = Vote(
-      post_id = data["post_id"]
+      post_id = data["post_id"],
       user_id = session.get("user_id")
     )
 
@@ -115,6 +121,63 @@ def upvote():
 
     db.rollback()
     return jsonify(message = "Upvote failed"), 500
-
   return "", 204
+
+# post route for new post
+@bp.route("/posts", methods = ["POST"])
+@login_required
+def create():
+  data = request.get_json()
+  db = get_db()
+
+  try:
+    # creates new post for db
+    newPost = Post(
+      title = data["title"],
+      post_url = data["post_url"],
+      user_id = session.get("user_id")
+    )
+
+    db.add(newPost)
+    db.commit()
+  except:
+    print(sys.exc_info()[0])
+
+    db.rollback()
+    return jsonify(message = "Create New Post Failed")
+  return jsonify(id = newPost.id)
+
+@bp.route("/posts/<id>", methods=["PUT"])
+@login_required
+def update(id):
+  data = request.get_json()
+  db = get_db()
   
+  try:
+  # get the post from data base and update it
+    post = db.query(Post).filter(Post.id == id).one()
+    post.title = data["title"]
+    db.commit()
+  except:
+    print(sys.exc_info()[0])
+
+    db.rollback()
+    return jsonify(message = "Post not found"), 404
+  return "", 204
+
+@bp.route("posts/<id>", methods=["PUT"])
+@login_required
+def delete(id):
+  db = get_db()
+
+  try:
+    # delete the post from db
+    db.delete(db.query(Post).filter(Post.id == id).one())
+    db.commit()
+  except:
+    print(sys.exc_info()[0])
+
+    db.rollback()
+    return jsonify(message = "Post not found"), 404
+  return "", 204
+
