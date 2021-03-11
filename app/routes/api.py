@@ -95,3 +95,26 @@ def comment():
     return jsonify(message = "Comment Failed"), 500
     
   return jsonify(id = newComment.id)
+
+@bp.route("/posts/upvote", method["PUT"])
+def upvote():
+  data = request.get_json()
+  db = get _db()
+
+  try:
+    #create a new bote with incoming id and session id
+    newVote = Vote(
+      post_id = data["post_id"]
+      user_id = session.get("user_id")
+    )
+
+    db.add(newVote)
+    db.commit()
+  except:
+    print(sys.exc_info()[0])
+
+    db.rollback()
+    return jsonify(message = "Upvote failed"), 500
+
+  return "", 204
+  
